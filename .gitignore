@@ -1,0 +1,6 @@
+data/sample_3gpp/*.docx
+index_store/
+venv/
+__pycache__/
+*.pyc
+.env

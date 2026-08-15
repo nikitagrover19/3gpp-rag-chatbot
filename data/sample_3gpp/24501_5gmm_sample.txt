@@ -1,0 +1,54 @@
+3GPP TS 24.501 - Non-Access-Stratum (NAS) protocol for 5G System (5GS) [SAMPLE EXCERPT FOR DEMO]
+
+5.5.1 Registration procedure
+
+5.5.1.1 General
+The registration procedure is used by the UE to register with 5GS for 5GS services, e.g. IP connectivity
+and IMS voice. The registration procedure is used for initial registration, mobility registration update,
+periodic registration update, and emergency registration.
+
+5.5.1.2 Initial registration procedure
+
+5.5.1.2.1 General
+An initial registration procedure is used when the UE needs to perform an initial registration to a PLMN,
+or when the UE is switched on, or when the UE needs to initiate a registration in an existing PDU session
+context due to an inter-system change from S1 mode to N1 mode.
+
+5.5.1.2.2 Initial registration initiation
+In state 5GMM-DEREGISTERED, the UE initiates the registration procedure by sending a REGISTRATION
+REQUEST message to the AMF, starting timer T3510 and entering state 5GMM-REGISTRATION-INITIATED.
+The REGISTRATION REQUEST message shall include the 5GS registration type IE, the ngKSI IE, and the
+5GS mobile identity IE set to the SUCI, 5G-GUTI, PEI, or IMSI depending on availability.
+
+5.5.1.2.3 Initial registration accepted by the network
+Upon receiving a REGISTRATION REQUEST, if the AMF accepts the registration, it shall send a
+REGISTRATION ACCEPT message to the UE and stop timer T3510. Upon receipt of the REGISTRATION
+ACCEPT message, the UE shall stop timer T3510, enter state 5GMM-REGISTERED, and set the 5GS
+update status to 5U1 UPDATED.
+
+5.5.1.2.4 Initial registration not accepted by the network
+If the initial registration cannot be accepted by the network, the AMF shall send a REGISTRATION
+REJECT message to the UE including an appropriate 5GMM cause value. Upon receipt of REGISTRATION
+REJECT, the UE shall stop timer T3510 and take actions depending on the 5GMM cause value received,
+for example cause #3 "Illegal UE" shall be treated as specified in subclause 5.5.1.2.6.
+
+5.5.1.3 Mobility and periodic registration update procedure
+
+5.5.1.3.1 General
+The mobility registration update procedure is initiated by the UE in state 5GMM-REGISTERED when
+certain conditions are fulfilled, e.g. the UE detects entering a new tracking area not in the TAI list, or the
+periodic registration update timer T3512 expires, or the UE needs to update its 5GS capability or MICO
+mode.
+
+5.6.1 UE-requested PDU session establishment procedure
+
+5.6.1.1 General
+The purpose of the UE-requested PDU session establishment procedure is to establish a new PDU session
+between the UE and a data network by using 5GSM procedures. The UE-requested PDU session establishment
+procedure is used to: a) establish a new PDU session; or b) request an emergency PDU session.
+
+5.6.1.2 UE-requested PDU session establishment procedure initiation
+In order to initiate the procedure, the UE shall send a PDU SESSION ESTABLISHMENT REQUEST message
+included in an UL NAS TRANSPORT message, start timer T3580, and enter state PDU SESSION
+INACTIVE-PENDING. The PDU SESSION ESTABLISHMENT REQUEST message shall include an integrity
+protected PDU session ID and PTI (procedure transaction identity).

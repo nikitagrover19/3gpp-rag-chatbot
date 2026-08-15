@@ -1,0 +1,36 @@
+3GPP TS 23.501 - System architecture for the 5G System (5GS) [SAMPLE EXCERPT FOR DEMO]
+
+4.2.1 Non-roaming reference architecture
+
+The 5G System architecture is defined to support data connectivity and services enabling deployments
+to use techniques such as Network Function virtualization and Software Defined Networking. The 5G
+System architecture is defined as service-based, and the interaction between network functions is
+represented as: a) a service-based representation, where network functions within the Control Plane
+enable other authorized network functions to access their services; b) a reference point representation.
+
+4.2.2 Network functions and entities
+
+4.2.2.1 AMF (Access and Mobility Management Function)
+The AMF includes the following functionality: termination of RAN CP interface (N2), termination of
+NAS (N1), NAS ciphering and integrity protection, registration management, connection management,
+mobility management, access authentication and authorization, security context management.
+
+4.2.2.2 SMF (Session Management Function)
+The SMF includes the following functionality: session management (session establishment, modification
+and release, including tunnel maintenance between UPF and AN node), UE IP address allocation and
+management, selection and control of UP function, configuring traffic steering at UPF, termination of
+interfaces towards policy control functions.
+
+4.2.2.3 UPF (User Plane Function)
+The UPF includes the following functionality: anchor point for intra-/inter-RAT mobility, external PDU
+session point of interconnect to data network, packet routing and forwarding, packet inspection, user
+plane part of policy rule enforcement, lawful intercept, traffic usage reporting.
+
+4.3 Network slicing
+
+4.3.1 General
+A Network Slice is defined within a PLMN and includes the Core Network Control Plane and User Plane
+Network Functions, and in the serving PLMN, at least one of: the NG-RAN, and the N3IWF functions
+to the non-3GPP Access Network. A single UE can simultaneously be served by one or more Network
+Slice instances via a 5G-AN. Single-Network Slice Selection Assistance information (S-NSSAI) identifies
+a Network Slice.

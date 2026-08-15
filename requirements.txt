@@ -1,0 +1,16 @@
+# Core RAG stack — retrieval is fully local/free; generation uses Groq's free API
+sentence-transformers>=2.7.0
+faiss-cpu>=1.8.0
+pypdf>=4.2.0
+numpy>=1.26.0
+rich>=13.7.0
+
+# Generation: Groq free tier (Qwen3-32B). Free, no credit card. Get a key at
+# https://console.groq.com
+python-docx>=1.1.0
+groq>=0.9.0
+
+# Only needed if you switch GENERATION_BACKEND to "local_hf" in config.py
+# transformers>=4.42.0
+# torch>=2.2.0
+# accelerate>=0.30.0
