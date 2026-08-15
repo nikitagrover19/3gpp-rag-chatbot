@@ -4,6 +4,8 @@ A Retrieval-Augmented Generation chatbot that answers questions grounded in 3GPP
 standards documentation, built to minimize hallucination. Fully local and free:
 no API keys, no paid services.
 
+![Evaluation Results](eval_results.png)
+
 ## 1. Problem framing
 
 A chatbot over telecom standards is a high-stakes domain for hallucination: specs
