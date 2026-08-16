@@ -111,8 +111,11 @@ answers in full for manual review.
 
 ![Evaluation Results](results_assets/eval_results.png)
 
-Run against the ingested corpus (8,266 chunks across TS 24.501, TS 23.501,
-TS 23.502) with `openai/gpt-oss-120b` via Groq:
+
+Run against the ingested corpus (8,266 chunks — 8,253 from the three real
+specs, TS 24.501/23.501/23.502, plus 13 from two small synthetic sample
+files also present in `data/sample_3gpp/` for out-of-the-box runnability)
+with `openai/gpt-oss-120b` via Groq:
 
 | Metric | Result |
 |---|---:|
@@ -120,6 +123,8 @@ TS 23.502) with `openai/gpt-oss-120b` via Groq:
 | Citation groundedness | 9/9 (100%) |
 | Self-correction (invented citations auto-fixed) | 2/2 (100%) |
 | Retrieval hit rate (diagnostic) | 4/9 (44%) |
+
+The headline goal of the system is groundedness rather than maximizing retrieval recall: when evidence is insufficient, the system is designed to refuse rather than answer from model knowledge.
 
 ### Debugging a retrieval failure
 
@@ -143,8 +148,9 @@ meant to reject front-matter boilerplate was rejecting any candidate clause
 title that didn't start with an uppercase letter. Many real 3GPP
 information-element names start with a digit ("5GS mobile identity",
 "5G-GUTI"), so the filter was silently dropping those clauses across the
-whole corpus — re-ingestion after the fix recovered 64 previously-dropped
-chunks, not just this one clause.
+whole corpus. Comparing the three real specs before and after the fix
+(2254+2618+3330=8202 before, 2267+2624+3362=8253 after) recovered 51
+previously-dropped chunks.
 
 After the fix and a rebuild, the same question retrieves clause 9.11.3.4
 directly (top result, 0.71 similarity) and cites it correctly, with no
@@ -157,8 +163,7 @@ it from reaching the retrieved context. The audit caught the symptom;
 tracing it back distinguished a retrieval bug from genuine fabrication and
 led to a fix rather than just a logged warning.
 
-Self-correction was also tested on this exact case, before the fix: it did
-not resolve it (the model repeated the same citation even after being told
+In an earlier pre-fix test, self-correction was also tested on this exact case: it did not resolve it (the model repeated the same citation even after being told
 it was invalid), and the system reported that failure explicitly rather
 than silently keeping the flawed answer:
 
@@ -171,10 +176,29 @@ and automatic correction did not fully resolve it: {'9.11.3.4'}
 
 One eval case asks about clause `5.4.4.2` in TS 23.501, which the real spec
 marks `Void`. The model reports that the provided context doesn't cover it,
-which is correct — but retrieval doesn't actually surface that clause for
-this query, likely because a `Void` clause has almost no text to embed
-against. The refusal is correct, but for a retrieval-recall reason rather
-than the model having seen and reported the clause as void.
+which is a correct refusal — the clause wasn't in the top-5 retrieved
+chunks for this query.
+
+Checking this directly (`grep '"clause_number": "5.4.4.2"' index_store/chunks.jsonl`)
+shows the more precise reason: clause 5.4.4.2 does exist in the corpus, and
+its chunk isn't actually empty — it also contains text that belongs to
+subclause `5.4.4.2a` ("UE Radio Capability Match Request"), merged in
+because the clause-header regex doesn't detect letter-suffixed clause
+numbers like `5.4.4.2a`. A likely explanation is ordinary retrieval
+ranking: clause 5.4.4.1, titled "UE radio capability information storage
+in the AMF," is a closer topical match to the wording of the question and
+ranks higher. This is ordinary retrieval behavior, not a special case for
+`Void` clauses.
+
+Separately, clause number `5.4.4.2` also exists in TS 24.501 with
+completely different content ("Generic UE configuration update procedure
+initiated by the network"). Clause numbers are only unique within a single
+document, but the citation-groundedness check (`extract_cited_clauses` /
+`retrieved_clauses` in `generator.py`) currently compares clause numbers
+only, not clause number plus source document — so a citation could in
+principle be marked grounded against a same-numbered clause in the wrong
+document. This is listed under Known Limitations below rather than fixed,
+since it wasn't observed to actually happen in testing.
 
 ### Bugs found and fixed
 
@@ -259,3 +283,11 @@ To run without an API key, set `GENERATION_BACKEND = "local_hf"` in
 - Table content in `.docx` files is not extracted — `read_docx_file()`
   reads paragraph text only, so parameter tables in some annexes are not
   indexed.
+- Clause numbers are only unique within a document (e.g. `5.4.4.2` means
+  different things in TS 23.501 vs TS 24.501), but the citation-groundedness
+  check compares clause numbers alone, not clause number plus source
+  document. Not observed to cause a false grounding pass in testing, but a
+  real gap — checking `(source_doc, clause_number)` pairs would close it.
+- The clause-header regex doesn't detect letter-suffixed clause numbers
+  (`5.4.4.2a`, `9.11.3.46A`) as separate headers, so that content is merged
+  into the preceding numbered clause's chunk instead of getting its own.

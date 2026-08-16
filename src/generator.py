@@ -1,39 +1,39 @@
 """
 Generation layer: turns (question, retrieved chunks) into a grounded answer.
 
-Anti-hallucination design choices (this is the core of the assignment):
+Anti-hallucination design choices:
 
 1. Retrieval gate: if retriever.py returns zero chunks (nothing above
    MIN_SIMILARITY), we never even call the LLM — we return REFUSAL_MESSAGE
-   directly. The model can't hallucinate an answer it's never asked to produce.
+   directly.
 
-2. Strict grounding instruction: the system prompt explicitly forbids using
-   outside/parametric knowledge and requires every claim to be traceable to
-   a provided chunk.
+2. Strict grounding instruction: the system prompt forbids outside/
+   parametric knowledge and requires every claim to cite a provided chunk.
 
-3. Mandatory citation: the model must tag each claim with the clause number
-   it came from (e.g. "[TS 24.501 § 5.5.1.2.3]"). This does double duty —
-   it gives the evaluator a way to verify claims against the source, and the
-   act of having to name a specific clause measurably suppresses free-form
-   fabrication compared to unattributed generation.
+3. Mandatory citation format: [<source_doc> § <clause_number>].
 
-4. Explicit "insufficient information" instruction: the model is told, in
-   the system prompt, that saying "not covered in the provided documents" is
-   a fully acceptable and preferred answer when the chunks don't fully
-   answer the question — this removes the implicit pressure most chat models
-   have to always produce a confident, complete answer.
+4. Explicit "insufficient information" instruction: the system prompt states
+   that declining to answer is preferred over a fabricated complete answer.
 
-5. Low temperature: deterministic decoding reduces variance and speculative
-   phrasing.
+5. Low temperature: more deterministic decoding.
 
-6. Post-hoc citation check (see evaluate.py): every clause number cited in
-   the answer is checked against the clause numbers actually present in the
-   retrieved context; uncited/invented clause numbers are flagged.
+6. Post-hoc citation audit (extract_cited_clauses, below): every clause
+   number cited in the answer is checked against the clause numbers actually
+   retrieved; a citation to a clause never retrieved is flagged as invented.
 
-Backend is pluggable: GENERATION_BACKEND = "local_hf" runs a small
-instruction-tuned model fully locally and for free. Set it to "api" and
-fill in call_api_backend() to use a free-tier hosted API instead (Groq,
-Google AI Studio, etc.) if you want faster responses without a local GPU.
+7. Self-correction (_attempt_self_correction, below): when the audit flags
+   an invented citation, the answer is sent back to the model with the
+   specific problem named and a revision is requested, before showing
+   anything to the caller. Falls back to the original answer plus a warning
+   if the correction doesn't resolve it.
+
+Backend is pluggable via GENERATION_BACKEND in config.py:
+- "groq" (default): openai/gpt-oss-120b via the Groq API, free tier,
+  requires GROQ_API_KEY.
+- "local_hf": a small model (LOCAL_LLM_MODEL_NAME) run fully offline via
+  transformers, no API key required, lower answer quality.
+Both dispatch through _call_backend(), below, so the grounding/audit logic
+above is identical regardless of which backend is active.
 """
 import os
 import sys

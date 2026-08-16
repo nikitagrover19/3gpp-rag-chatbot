@@ -1,4 +1,6 @@
-"""Run retrieval and generation for a user question."""
+"""
+End-to-end RAG pipeline: question -> retrieve -> generate -> grounded answer.
+"""
 import os
 import sys
 
@@ -34,6 +36,10 @@ if __name__ == "__main__":
     result = answer_question(args.question)
     print("\n--- ANSWER ---")
     print(result["answer"])
-    if result["uncited_or_invented_clauses"]:
+    if result.get("correction_attempted") and not result["correction_succeeded"]:
+        print(f"\n[WARNING] Cited clause(s) not present in retrieved context, and "
+              f"automatic correction did not fully resolve it: "
+              f"{result['uncited_or_invented_clauses']}")
+    elif result["uncited_or_invented_clauses"]:
         print(f"\n[WARNING] Model cited clause(s) not present in retrieved context: "
               f"{result['uncited_or_invented_clauses']}")
