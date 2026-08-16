@@ -151,11 +151,11 @@ directly (top result, 0.71 similarity) and cites it correctly, with no
 warning. This case is documented in
 `tests/test_chunking.py::test_digit_led_clause_titles_are_kept`.
 
-This wasn't purely a model hallucination — the model had accurate knowledge
-from training, but the pipeline had failed to put the matching source
-material into context. The audit caught the symptom; tracing it back
-distinguished a retrieval bug from genuine fabrication and led to a fix
-rather than just a logged warning.
+This turned out not to be a pure model hallucination: the clause was
+genuinely present in the source document, but the ingestion bug prevented
+it from reaching the retrieved context. The audit caught the symptom;
+tracing it back distinguished a retrieval bug from genuine fabrication and
+led to a fix rather than just a logged warning.
 
 Self-correction was also tested on this exact case, before the fix: it did
 not resolve it (the model repeated the same citation even after being told
