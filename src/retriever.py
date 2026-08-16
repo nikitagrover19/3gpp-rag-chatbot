@@ -1,14 +1,4 @@
-"""
-Retrieval layer. Given a user question, returns the top-k most relevant
-chunks *above a minimum similarity threshold*.
-
-The threshold is deliberate: if the top result's similarity is below
-MIN_SIMILARITY, that's a strong signal the corpus doesn't actually contain
-an answer to this question. Returning low-relevance chunks anyway is one of
-the most common causes of RAG hallucination (the model politely "makes do"
-with irrelevant context). We'd rather return nothing and let the generator
-refuse.
-"""
+"""Retrieve relevant chunks using FAISS and a minimum similarity threshold."""
 import os
 import sys
 import json
@@ -35,9 +25,7 @@ def _lazy_load():
 
 
 def retrieve(query, top_k=TOP_K, min_similarity=MIN_SIMILARITY):
-    """Returns a list of chunk dicts (with a 'score' field), filtered by
-    min_similarity, ordered best-first. Empty list means: nothing relevant
-    enough was found."""
+    """Return relevant chunks above the similarity threshold."""
     _lazy_load()
     import numpy as np
 

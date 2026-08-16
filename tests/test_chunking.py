@@ -1,8 +1,4 @@
-"""
-Offline unit tests for clause-aware chunking (no ML dependencies required).
-Run with: python -m pytest tests/test_chunking.py -v
-    or:   python tests/test_chunking.py
-"""
+"""Unit tests for clause-aware chunking."""
 import os
 import sys
 
@@ -69,7 +65,6 @@ Real body text for the registration procedure clause.
 def test_toc_entries_are_filtered_out():
     clauses = split_into_clauses(TOC_SAMPLE, "test.txt", "TS 23.501")
     numbers = [c["clause_number"] for c in clauses]
-    # only the two real body clauses should survive; ToC lines must not appear
     assert numbers == ["5.5.1", "5.5.1.1"], numbers
 
 
@@ -96,8 +91,6 @@ The present document defines the Stage 2 system architecture.
 def test_lowercase_continuation_lines_not_treated_as_clauses():
     clauses = split_into_clauses(BOILERPLATE_SAMPLE, "test.txt", "TS 23.501")
     numbers = [c["clause_number"] for c in clauses]
-    # only the real "1 Scope" heading should be picked up; the boilerplate
-    # "3 or greater indicates..." line must be rejected (lowercase continuation)
     assert numbers == ["1"], numbers
 
 
@@ -116,17 +109,7 @@ Body text for network feature support.
 
 
 def test_digit_led_clause_titles_are_kept():
-    """Regression test: a prior version of the false-positive filter used
-    'not title[0].isupper()' to reject boilerplate continuation lines, but
-    that ALSO rejected real clause titles starting with a digit (e.g.
-    "5GS mobile identity", "5G-GUTI") since a digit is neither upper nor
-    lower case in the sense the filter cared about — '5'.isupper() is
-    False, so these were incorrectly treated as boilerplate and silently
-    dropped from the corpus. This was traced end-to-end from a real
-    hallucinated citation during manual testing (the model correctly
-    "remembered" clause 9.11.3.4 from training data, but it had been
-    silently excluded from the ingested corpus by this bug, so the
-    citation-groundedness audit correctly flagged it as unretrieved)."""
+    """Keep clause titles that begin with a digit."""
     clauses = split_into_clauses(DIGIT_LED_TITLE_SAMPLE, "test.txt", "TS 24.501")
     numbers = [c["clause_number"] for c in clauses]
     assert numbers == ["9.11.3.3", "9.11.3.4", "9.11.3.5"], numbers
@@ -137,20 +120,13 @@ def test_digit_led_clause_titles_are_kept():
 
 def test_citation_extraction_requires_sub_level():
     from src.generator import extract_cited_clauses
-    # real citations to actual retrieved clauses (always multi-level) are captured
     assert extract_cited_clauses("[doc § 6.2.1]") == {"6.2.1"}
     assert extract_cited_clauses("[doc § 5.15.1] and [doc § 5.5.1.2.2]") == {"5.15.1", "5.5.1.2.2"}
-    # informal bare top-level references in prose are NOT mistaken for citations
     assert extract_cited_clauses("as described in §6 of the architecture") == set()
 
 
 def test_citation_extraction_handles_reordered_format():
-    """Regression test: the model doesn't always follow the requested
-    '[<source_doc> § <clause_number>]' format — it sometimes writes
-    '[<clause_number> § <description>]' instead, putting the clause number
-    BEFORE the § symbol. A real invented citation slipped past the audit
-    undetected in manual testing because of exactly this formatting drift.
-    extract_cited_clauses must catch clause numbers on either side of §."""
+    """Handle citations with the clause number before or after §."""
     from src.generator import extract_cited_clauses
     # clause number before §, with a description after (the format that broke detection)
     assert extract_cited_clauses("[6.2.1 § some description text]") == {"6.2.1"}

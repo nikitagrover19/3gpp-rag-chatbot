@@ -1,25 +1,4 @@
-"""
-Ingestion: turns raw 3GPP documents (PDF, DOCX, or .txt) into structure-aware
-chunks.
-
-Note on 3GPP's real distribution format: specs downloaded from
-https://www.3gpp.org/ftp/Specs/latest/<Release>/<series>_series are .zip
-files (e.g. 24501-id0.zip for TS 24.501). Each zip contains a single .doc or
-.docx file — not a PDF. Unzip the archive and drop the .docx into
-data/sample_3gpp/; this script reads .docx directly (see read_docx_file).
-If you only have the older binary .doc format, convert it to .docx first
-(e.g. open and re-save in Word, or use LibreOffice: `soffice --convert-to docx`).
-
-Why structure-aware chunking matters for hallucination reduction:
-3GPP specs use rigid hierarchical clause numbering (e.g. "5.5.1.2.3 Initial
-registration accepted by the network"). If we split naively by character
-count, we routinely cut a clause in half and hand the model incomplete
-context, which is a direct cause of hallucinated or fabricated procedure
-steps. Instead we detect clause headers with a regex and treat each clause
-as an atomic unit, only sub-splitting a clause if it exceeds MAX_CHUNK_CHARS.
-Every chunk keeps its clause number + title + source document as metadata,
-which lets the generator cite exact clauses instead of vague paraphrases.
-"""
+"""Ingest 3GPP documents into structure-aware chunks."""
 import os
 import re
 import json
@@ -31,23 +10,12 @@ from config import DATA_DIR, CHUNKS_PATH, INDEX_DIR, MAX_CHUNK_CHARS, CHUNK_OVER
 # Matches lines like "5.5.1.2.3 Initial registration accepted by the network"
 CLAUSE_HEADER_RE = re.compile(r"^(\d+(?:\.\d+){0,5})\s+(.+)$")
 
-# Word's exported Table of Contents entries look like
-# "4.2.5\tData Storage architectures\t50" — clause number, tab, title, tab,
-# trailing page number. Real body headings never end in a tab+page-number.
-# Without filtering these out, the ToC gets mis-parsed as real clause
-# headers/content (each ToC line's "title" swallows the *next* ToC line as
-# its body), producing junk chunks. We detect and skip any line ending in
-# a tab followed by a bare page number.
+# Word exports ToC entries with a trailing tab and page number.
 TOC_ENTRY_RE = re.compile(r"\t\d+\s*$")
 
 # Matches "3GPP TS 24.501 - Non-Access-Stratum ..." as the doc title line
 DOC_TITLE_RE = re.compile(r"^3GPP\s+(TS|TR)\s+([\d.]+)\s*-\s*(.+)$")
 
-# Table-of-contents lines look identical to real clause headers (a clause
-# number followed by a title) but end in a tab-separated page number, e.g.
-# "5.5.1\tRegistration procedure\t50". Real in-body clause headers never end
-# this way, so this is a reliable way to filter ToC noise out of the index
-# without a separate "skip until body starts" heuristic.
 TOC_TRAILING_PAGE_NUM_RE = re.compile(r"\t\d+\s*$")
 
 
@@ -82,21 +50,7 @@ def split_into_clauses(raw_text, doc_id, doc_title):
             continue  # skip table-of-contents lines entirely — not real clause content
         stripped = line.strip()
         m = CLAUSE_HEADER_RE.match(stripped)
-        # Real clause titles start with either a capital letter ("Scope",
-        # "References", "General") or a digit — many real 3GPP IE names
-        # begin with a number, e.g. "5GS mobile identity", "5G-GUTI",
-        # "4G-GUTI". This rejects only the actual false-positive pattern:
-        # stray lines from the front-matter "version numbering convention"
-        # boilerplate (e.g. "3 or greater indicates TSG approved document
-        # under change control."), which start with a bare digit followed
-        # by a LOWERCASE word — never a digit followed by an uppercase
-        # word like "5GS" or "5G-GUTI". An earlier version of this check
-        # used "not isupper()" instead of "islower()", which also (and
-        # incorrectly) rejected any title starting with a digit — silently
-        # dropping real clauses like "9.11.3.4 5GS mobile identity" from
-        # the corpus entirely. That specific miss was traced end-to-end
-        # from a hallucinated citation in generation, back through
-        # retrieval, to this exact filtering bug.
+        # Reject likely false-positive lines from document front matter.
         if m and m.group(2)[:1].islower():
             m = None
         if m and len(m.group(2)) < 120:  # header lines are short; avoids false positives on body text

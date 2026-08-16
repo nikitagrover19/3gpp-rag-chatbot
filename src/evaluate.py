@@ -1,17 +1,4 @@
-"""
-Evaluation harness. Runs eval_set.json through the pipeline and reports:
-
-1. Refusal accuracy: for questions marked "answerable: false" (i.e. genuinely
-   not covered by the ingested corpus), did the system correctly refuse
-   instead of fabricating an answer? This is the primary hallucination
-   metric requested by the assignment.
-2. Groundedness: for answerable questions, did every cited clause number
-   actually appear in the retrieved context (no invented citations)?
-3. Retrieval hit: did the expected clause show up among the retrieved chunks?
-
-This is intentionally a lightweight, deterministic eval (no LLM-as-judge)
-so it's cheap to run and easy to explain in an interview.
-"""
+"""Evaluate retrieval, groundedness, and refusal behavior of the RAG pipeline."""
 import os
 import sys
 import json
@@ -22,22 +9,11 @@ from src.rag_pipeline import answer_question
 
 EVAL_SET_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "eval_set.json")
 
-# Groq's free tier caps tokens-per-minute (8000 TPM as of writing). Each RAG
-# call sends ~5 chunks of context plus the system prompt, which can be
-# 1500-2500+ tokens per request — firing eval cases back-to-back can exceed
-# the limit within 3-4 calls. This pause keeps us comfortably under it.
+# Keep eval requests below the Groq free-tier token limit.
 SECONDS_BETWEEN_CALLS = 15
 
-# Phrases the model uses (per the system prompt's instruction) to signal
-# "this isn't covered by the provided context" in its own words. A single
-# hardcoded phrase is too brittle — real refusals are phrased many ways
-# ("do not contain", "cannot be answered", "not specified", etc.) — so we
-# check against this broader set instead of requiring an exact match.
+# Match common ways the model indicates that the corpus does not cover a question.
 REFUSAL_PHRASES = [
-    # "not cover" as a substring catches "not covered", "does not cover",
-    # and "do not cover" all at once — an earlier version used "not covered"
-    # specifically, which missed present-tense phrasing like "do not cover
-    # Mavenir's implementation" and produced a false FAIL on a real refusal.
     "not cover", "does not contain", "do not contain", "cannot be answered",
     "does not specify", "do not specify", "no information", "not specified",
     "not addressed", "does not describe", "do not describe", "not available",
@@ -45,9 +21,6 @@ REFUSAL_PHRASES = [
 ]
 
 
-# Cases in these categories test qualitative behavior (HOW the model refuses
-# or handles an edge case, not just whether it refuses) — the automated
-# PASS/FAIL is still computed, but flagged here as worth a manual read too.
 CATEGORIES_NEEDING_MANUAL_REVIEW = {"prompt_injection", "deprecated_clause_handling"}
 
 
@@ -63,8 +36,8 @@ def run_eval():
     retrieval_hits = 0
     corrections_attempted = 0
     corrections_succeeded = 0
-    category_results = {}  # category -> [pass_count, total_count]
-    manual_review_answers = []  # (question, category, answer) for the printed appendix
+    category_results = {} 
+    manual_review_answers = [] 
 
     print(f"Running {n} eval cases...\n")
 

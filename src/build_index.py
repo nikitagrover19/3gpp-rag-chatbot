@@ -1,9 +1,4 @@
-"""
-Builds a local FAISS vector index over the chunked 3GPP text using a free,
-local sentence-transformers embedding model (no API key, no cost).
-
-Run this after src/ingest.py has produced index_store/chunks.jsonl.
-"""
+"""Build a local FAISS index from the ingested text chunks."""
 import os
 import sys
 import json
@@ -38,7 +33,6 @@ def build_index():
     embeddings = model.encode(texts, show_progress_bar=True, normalize_embeddings=True)
     embeddings = np.asarray(embeddings, dtype="float32")
 
-    # Inner product on normalized vectors == cosine similarity
     index = faiss.IndexFlatIP(embeddings.shape[1])
     index.add(embeddings)
     faiss.write_index(index, FAISS_INDEX_PATH)

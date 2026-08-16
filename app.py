@@ -1,9 +1,4 @@
-"""
-Simple CLI chat loop for the 3GPP RAG chatbot.
-
-Usage:
-    python app.py
-"""
+"""CLI chat loop for the 3GPP RAG chatbot."""
 import sys
 from src.rag_pipeline import answer_question
 

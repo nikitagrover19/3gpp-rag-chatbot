@@ -1,6 +1,4 @@
-"""
-End-to-end RAG pipeline: question -> retrieve -> generate -> grounded answer.
-"""
+"""Run retrieval and generation for a user question."""
 import os
 import sys
 
