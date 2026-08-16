@@ -34,7 +34,11 @@ SECONDS_BETWEEN_CALLS = 15
 # ("do not contain", "cannot be answered", "not specified", etc.) — so we
 # check against this broader set instead of requiring an exact match.
 REFUSAL_PHRASES = [
-    "not covered", "does not contain", "do not contain", "cannot be answered",
+    # "not cover" as a substring catches "not covered", "does not cover",
+    # and "do not cover" all at once — an earlier version used "not covered"
+    # specifically, which missed present-tense phrasing like "do not cover
+    # Mavenir's implementation" and produced a false FAIL on a real refusal.
+    "not cover", "does not contain", "do not contain", "cannot be answered",
     "does not specify", "do not specify", "no information", "not specified",
     "not addressed", "does not describe", "do not describe", "not available",
     "does not provide", "do not provide", "not mentioned", "does not mention",
