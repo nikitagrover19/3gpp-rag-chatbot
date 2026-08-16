@@ -1,8 +1,10 @@
 # 3GPP RAG Chatbot
 
 A Retrieval-Augmented Generation chatbot for answering questions over 3GPP
-standards documentation. The pipeline is designed to prefer a grounded
-refusal over an answer that cannot be supported by the retrieved documents.
+standards documentation. Retrieval and embeddings run locally; generation
+uses a free Groq API by default, with a fully local, no-API-key fallback
+available. The pipeline is designed to prefer a grounded refusal over an
+answer that cannot be supported by the retrieved documents.
 
 ## Architecture
 
@@ -129,11 +131,12 @@ the retrieved context. The citation audit flagged the mismatch every time:
 [groundedness warning] cited clause(s) not found in retrieved context: {'9.11.3.4'}
 ```
 
-The consistency across repeated attempts was the signal worth tracing:
-random fabrication doesn't usually reach for the same specific clause
-number every time. Grepping the raw `.docx` directly (bypassing the
-chunker) found that clause 9.11.3.4 was genuinely present in the source
-document, with content matching what the model had produced.
+The repeated appearance of the same specific clause number suggested this
+was worth investigating as a possible retrieval or ingestion issue rather
+than assuming it was arbitrary fabrication. Grepping the raw `.docx`
+directly (bypassing the chunker) found that clause 9.11.3.4 was genuinely
+present in the source document, with content matching what the model had
+produced.
 
 The root cause was in the clause-header filter in `ingest.py`: a check
 meant to reject front-matter boilerplate was rejecting any candidate clause
