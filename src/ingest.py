@@ -82,14 +82,22 @@ def split_into_clauses(raw_text, doc_id, doc_title):
             continue  # skip table-of-contents lines entirely — not real clause content
         stripped = line.strip()
         m = CLAUSE_HEADER_RE.match(stripped)
-        # Real clause titles always start with a capital letter ("Scope",
-        # "References", "General"). This rejects false positives like stray
-        # lines from the front-matter "version numbering convention"
+        # Real clause titles start with either a capital letter ("Scope",
+        # "References", "General") or a digit — many real 3GPP IE names
+        # begin with a number, e.g. "5GS mobile identity", "5G-GUTI",
+        # "4G-GUTI". This rejects only the actual false-positive pattern:
+        # stray lines from the front-matter "version numbering convention"
         # boilerplate (e.g. "3 or greater indicates TSG approved document
         # under change control."), which start with a bare digit followed
-        # by lowercase continuation text and would otherwise be mistaken
-        # for a clause header.
-        if m and not m.group(2)[:1].isupper():
+        # by a LOWERCASE word — never a digit followed by an uppercase
+        # word like "5GS" or "5G-GUTI". An earlier version of this check
+        # used "not isupper()" instead of "islower()", which also (and
+        # incorrectly) rejected any title starting with a digit — silently
+        # dropping real clauses like "9.11.3.4 5GS mobile identity" from
+        # the corpus entirely. That specific miss was traced end-to-end
+        # from a hallucinated citation in generation, back through
+        # retrieval, to this exact filtering bug.
+        if m and m.group(2)[:1].islower():
             m = None
         if m and len(m.group(2)) < 120:  # header lines are short; avoids false positives on body text
             if TOC_TRAILING_PAGE_NUM_RE.search(stripped):

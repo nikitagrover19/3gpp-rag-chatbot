@@ -57,6 +57,8 @@ def run_eval():
     grounded_answers = 0
     total_answerable = 0
     retrieval_hits = 0
+    corrections_attempted = 0
+    corrections_succeeded = 0
     category_results = {}  # category -> [pass_count, total_count]
     manual_review_answers = []  # (question, category, answer) for the printed appendix
 
@@ -73,6 +75,14 @@ def run_eval():
 
         category_results.setdefault(category, [0, 0])
         category_results[category][1] += 1
+
+        if result.get("correction_attempted"):
+            corrections_attempted += 1
+            if result["correction_succeeded"]:
+                corrections_succeeded += 1
+                print("  [self-correction triggered and succeeded — invented citation was auto-fixed]")
+            else:
+                print("  [self-correction triggered but did not fully resolve the issue]")
 
         passed = False
         if not case["answerable"]:
@@ -115,6 +125,9 @@ def run_eval():
               f"({100*grounded_answers/total_answerable:.0f}%)")
         print(f"Retrieval hit rate:                      {retrieval_hits}/{total_answerable} "
               f"({100*retrieval_hits/total_answerable:.0f}%)")
+    if corrections_attempted:
+        print(f"Self-correction:                        {corrections_succeeded}/{corrections_attempted} "
+              f"invented citations automatically fixed")
 
     print("\n" + "=" * 50)
     print("BY CATEGORY")

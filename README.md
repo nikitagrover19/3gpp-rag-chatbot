@@ -4,8 +4,6 @@ A Retrieval-Augmented Generation chatbot that answers questions grounded in 3GPP
 standards documentation, built to minimize hallucination. Fully local and free:
 no API keys, no paid services.
 
-![Evaluation Results](eval_results.png)
-
 ## 1. Problem framing
 
 A chatbot over telecom standards is a high-stakes domain for hallucination: specs
@@ -155,42 +153,114 @@ prints those answers in full for manual review alongside the automated score.
 
 ## 5. Results
 
-Run against the real ingested corpus (8,202 chunks across TS 24.501, TS
-23.501, TS 23.502) with `openai/gpt-oss-120b` via Groq:
+![Evaluation Results](results_assets/eval_results.png)
+
+Run against the real ingested corpus (8,266 chunks across TS 24.501, TS
+23.501, TS 23.502) with `openai/gpt-oss-120b` via Groq, 15 eval cases across
+9 categories (basic factual, out-of-scope, vendor-specific, prompt injection,
+multi-hop, ambiguous phrasing, near-miss real-world/performance data, and
+deprecated-clause handling):
 
 | Metric | Result |
 |---|---|
-| Refusal accuracy (hallucination guard) | 3/3 — 100% on the original set; full 15-case set includes 6 unanswerable cases across injection/near-miss/vendor-specific categories |
-| Citation groundedness | 4/4 — 100% |
-| Retrieval hit rate (diagnostic) | 3/4 — 75% |
+| Refusal accuracy (hallucination guard) | 6/6 — 100% |
+| Citation groundedness (no invented citations in the *final* delivered answer) | 9/9 — 100% |
+| Self-correction (invented citations automatically detected and fixed) | 2/2 — 100% |
+| Retrieval hit rate (diagnostic only, not a hallucination metric) | 4/9 — 44% |
 
-**A hallucination was caught in manual testing, not just theorized about.**
+### A hallucination was traced end-to-end, not just caught and logged
+
 Asked "What is the 5GS mobile identity IE used for?", the model's answer was
-substantively correct but cited clause `9.11.3.4`, a clause number that was
+substantively correct but cited clause `9.11.3.4` — a clause number that was
 never in the retrieved context. The post-hoc citation audit flagged it
 automatically:
 ```
 [groundedness warning] cited clause(s) not found in retrieved context: {'9.11.3.4'}
 ```
-This is the concrete evidence that the pipeline's safety net works — not a
-hypothetical description of what it's designed to catch, but a real instance
-of it catching something.
+This happened consistently across repeated attempts, which was itself a clue:
+random hallucination doesn't usually reach for the exact same specific clause
+number every time. That consistency motivated tracing it further rather than
+treating it as a one-off — was this genuine fabrication, or was clause 9.11.3.4
+actually somewhere in the corpus and just not being retrieved?
 
-**Development also surfaced and fixed three real bugs against actual 3GPP
-formatting** (documented in `ingest.py` and `generator.py` comments, and
-covered by unit tests in `tests/test_chunking.py`):
-1. Word-exported Table of Contents entries were initially mis-parsed as real
-   clause content (each ToC line's title swallowing the next line as its
-   body) — fixed by detecting the tab+page-number pattern unique to ToC
-   lines.
-2. Front-matter boilerplate ("...3 or greater indicates TSG approved
-   document...") was briefly mis-detected as a clause header because it
-   starts with a bare digit — fixed by requiring clause titles to start with
-   a capital letter.
-3. The citation-extraction regex initially flagged informal in-prose section
-   references (e.g. "§6" used loosely, not as a specific citation) as
-   invented citations — fixed by requiring citations to match the multi-level
-   format (`X.Y...`) that real retrieved clauses always have.
+Grepping the raw `.docx` directly (bypassing the chunker) found the answer:
+**clause 9.11.3.4 ("5GS mobile identity") was genuinely present in the source
+document**, with real definitional content matching what the model had
+"recalled" from training. It just wasn't making it into the ingested chunks.
+The root cause was a bug in the chunker's clause-header validation: a filter
+meant to reject front-matter boilerplate (see bug #2 below) was checking
+whether a candidate clause title started with an uppercase letter — but many
+real 3GPP information-element names start with a **digit**, not a letter
+(`"5GS mobile identity"`, `"5G-GUTI"`). Since `'5'.isupper()` is `False`, the
+filter was silently discarding every clause whose title happened to start
+with a number, across the entire corpus (re-ingesting after the fix recovered
+64 previously-dropped chunks — this wasn't a one-clause fluke).
+
+After fixing the filter and rebuilding the index, the same exact question was
+re-run: clause `9.11.3.4` is now the top-retrieved result (0.714 similarity)
+and gets cited correctly, with no warning at all — because the real answer is
+now actually in the corpus, there's nothing left to fabricate.
+
+This is the strongest evidence in this project, not because the model never
+hallucinates (it does, and consistently, when a corpus gap lines up with
+something it knows from training) but because **every layer of the pipeline
+did its job**: the audit caught the symptom, the investigation identified
+whether it was a fabrication or a retrieval gap, and — in this case — it led
+to a real, verifiable, testable fix rather than just a logged warning.
+
+### Self-correction in practice
+
+Two of the 15 eval-run cases triggered an invented citation on the first
+generation attempt; both were automatically detected and corrected before
+being shown as the final answer (see `_attempt_self_correction` in
+`generator.py`). In a separate manual run *before* the chunking fix above,
+self-correction was attempted on the `9.11.3.4` case specifically and did
+**not** fully resolve it — the model kept reaching for the same fabricated
+citation even after being told it was invalid — and the system correctly
+surfaced that failure rather than hiding it:
+```
+[groundedness warning] cited clause(s) not found in retrieved context,
+and automatic correction did not fully resolve it: {'9.11.3.4'}
+```
+Both outcomes (successful auto-fix, and honest failure-to-fix) are real,
+observed behavior, not just designed-for scenarios.
+
+### Void-clause handling
+
+One eval case asks about clause `5.4.4.2` in TS 23.501, which the real spec
+marks `Void`. The model correctly reports that the provided context doesn't
+cover it rather than inventing content — but the more precise reason is a
+retrieval-recall limitation: a `Void` clause has almost no text (`"5.4.4.2
+Void"` and nothing else), so it embeds weakly and doesn't surface in the
+top-k for a semantically-loaded query about "UE radio capability information
+storage." The generation layer's behavior is still correct (honest refusal,
+not fabrication) — this is flagged here as an example of being precise about
+*why* a system behaves correctly, not just *that* it does.
+
+### Bugs found and fixed during development
+
+All four are covered by regression tests in `tests/test_chunking.py`:
+1. **Table of Contents mis-parsing.** Word-exported ToC entries were
+   initially mis-parsed as real clause content (each ToC line's title
+   swallowing the next line as its body) — fixed by detecting the
+   tab+page-number pattern unique to ToC lines.
+2. **Front-matter boilerplate false positive.** A stray line from the
+   "version numbering convention" boilerplate ("...3 or greater indicates
+   TSG approved document...") was briefly mis-detected as a clause header
+   because it starts with a bare digit — fixed by requiring clause titles to
+   not start with a lowercase letter.
+3. **Citation-extraction format sensitivity.** The regex initially only
+   matched clause numbers immediately after `§`, but the model doesn't
+   always follow the requested `[<doc> § <clause>]` ordering — it sometimes
+   writes `[<clause> § <description>]` instead, which silently evaded
+   detection entirely (this is how the `9.11.3.4` fabrication went
+   undetected across two full testing rounds before being caught). Fixed by
+   extracting any clause-number-shaped token from within any bracketed span
+   containing `§`, regardless of order.
+4. **Digit-led clause titles silently dropped.** The fix for bug #2 above
+   was itself too broad — see the traced hallucination story above. Fixed by
+   checking for a leading lowercase letter specifically, rather than the
+   absence of a leading uppercase letter.
 
 ## 6. Getting real 3GPP specs
 

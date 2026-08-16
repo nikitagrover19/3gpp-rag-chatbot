@@ -26,7 +26,15 @@ def main():
 
         result = answer_question(question)
         print("\nBot:", result["answer"])
-        if result["uncited_or_invented_clauses"]:
+        if result.get("correction_attempted"):
+            if result["correction_succeeded"]:
+                print("\n[self-correction] an invented citation was detected and automatically "
+                      "fixed before showing this answer.")
+            else:
+                print(f"\n[groundedness warning] cited clause(s) not found in retrieved "
+                      f"context, and automatic correction did not fully resolve it: "
+                      f"{result['uncited_or_invented_clauses']}")
+        elif result["uncited_or_invented_clauses"]:
             print(f"\n[groundedness warning] cited clause(s) not found in retrieved "
                   f"context: {result['uncited_or_invented_clauses']}")
 
